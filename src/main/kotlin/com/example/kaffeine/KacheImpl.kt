@@ -18,55 +18,47 @@ class KacheImpl<T>(
 ) : Kache<T> {
     companion object {
         private val log = LoggerFactory.getLogger(this::class.java)
+        private const val KEY_PREFIX = "KACHE"
     }
 
     private val objectMapper = jacksonObjectMapper().registerModule(JavaTimeModule())
 
     override fun identifier(): String = identifier
 
-    override fun buildKey(key: String): String = "KACHE:$identifier:$key"
+    override fun buildKey(key: String): String = "$KEY_PREFIX:$identifier:$key"
 
-    override suspend fun getIfPresent(key: String): T? {
-        val cacheKey = buildKey(key)
-
-        val l1CachedValue = caffeine.getIfPresent(cacheKey)
-        if (l1CachedValue != null) {
-            log.info("Found cached value in L1 for $cacheKey")
-            return l1CachedValue
-        }
-
-        val l2Cache: String? = reactiveStringRedisTemplate.opsForValue().getAndAwait(cacheKey)
-        val l2CachedValue: T? = l2Cache?.let { objectMapper.readValue(it, clazz) }
-
-        if (l2CachedValue != null) {
-            caffeine.put(cacheKey, l2CachedValue)
-            log.info("Found cached value in L2 for $cacheKey")
-            return l2CachedValue
-        }
-
-        val upstreamData = asyncLoader(key)
-        if (upstreamData != null) {
-            this.put(key, upstreamData)
-            return upstreamData
-        } else {
-            return null
-        }
-    }
+    override suspend fun getIfPresent(key: String): T? =
+        buildKey(key)
+            .let { cacheKey ->
+                caffeine
+                    .getIfPresent(cacheKey)
+                    ?.also { log.debug("Found cached value in L1 with $cacheKey") }
+                    ?: reactiveStringRedisTemplate
+                        .opsForValue()
+                        .getAndAwait(cacheKey)
+                        ?.let { objectMapper.readValue(it, clazz) }
+                        ?.also { log.debug("Found cached value in L2 with $cacheKey") }
+                        ?: asyncLoader(key)
+                            ?.also { log.debug("Loaded value from upstream with $cacheKey") }
+                            ?.also { data -> put(key, data) }
+            }
 
     override suspend fun getOrDefault(key: String, data: T): T = getIfPresent(key) ?: data
 
-    override suspend fun put(key: String, data: T) {
-        val cacheKey = buildKey(key)
+    override suspend fun put(key: String, data: T): Boolean =
+        buildKey(key)
+            .let { cacheKey ->
+                reactiveStringRedisTemplate
+                    .opsForValue()
+                    .setAndAwait(cacheKey, objectMapper.writeValueAsString(data))
+                    .takeIf { it }
+                    ?.also { caffeine.put(cacheKey, data!!) }
+                    ?.also { cacheSynchronizer?.publishCacheInvalidation(cacheKey) }
+                    ?: false
+            }
 
-        reactiveStringRedisTemplate.opsForValue().setAndAwait(cacheKey, objectMapper.writeValueAsString(data))
-
-        caffeine.put(cacheKey, data)
-
-        cacheSynchronizer?.publishCacheInvalidation(cacheKey)
-    }
-
-    override fun invalidateLocalCache(cacheKey: String) =
+    override fun invalidateLocalCache(cacheKey: String): Unit =
         caffeine
             .invalidate(cacheKey)
-            .also { log.info("Local cache invalidated: $cacheKey") }
+            .also { log.debug("Local cache invalidated: $cacheKey") }
 }
