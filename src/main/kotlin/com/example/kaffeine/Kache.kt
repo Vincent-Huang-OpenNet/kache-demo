@@ -30,7 +30,7 @@ interface Kache<T> {
      * 3. refresh all L1 caches
      *
      * we choose double delete strategy to refresh all L1 caches since multi level cache can't be strongly consistent
-     * so best practice is double delete with a small delay to acheive eventual consistency
+     * so best practice is double delete with a small delay to achieve eventual consistency
      *
      * put("987", memberPO)
      * updateUpstream(memberPO)
@@ -45,5 +45,8 @@ interface Kache<T> {
      */
     fun invalidateLocalCache(cacheKey: String)
 
+    /**
+     * invalidate L2 cache and refresh all L1 caches
+     */
     suspend fun invalidateAllCache(key: String)
 }
