@@ -15,7 +15,7 @@ class KacheImpl<T>(
     private val clazz: Class<T>,
     private val caffeine: Cache<String, T>,
     private val reactiveStringRedisTemplate: ReactiveStringRedisTemplate,
-    private val asyncLoader: suspend (key: String) -> T?,
+    private val asyncUpstreamDataLoader: suspend (key: String) -> T?,
     private val cacheSynchronizer: KacheSynchronizer? = null,
 ) : Kache<T> {
     companion object {
@@ -37,11 +37,11 @@ class KacheImpl<T>(
                         .getAndAwait(cacheKey)
                         ?.let { objectMapper.readValue(it, clazz) }
                         ?.also { log.debug("Found cached value in L2 with $cacheKey") }
-                        ?: acquireLock(buildUpdateLockKey(), Duration.ofMillis(500))
-                            .takeIf { it }
-                            ?.let { asyncLoader(key) }
-                            ?.also { log.debug("Loaded value from upstream with $cacheKey") }
-                            ?.also { data -> put(key, data) }
+                    ?: acquireLock(buildUpdateLockKey(), Duration.ofMillis(500))
+                        .takeIf { it }
+                        ?.let { asyncUpstreamDataLoader(key) }
+                        ?.also { log.debug("Loaded value from upstream with $cacheKey") }
+                        ?.also { data -> put(key, data) }
             }
 
     override suspend fun put(key: String, data: T): Boolean =
@@ -70,6 +70,11 @@ class KacheImpl<T>(
                     .let { caffeine.invalidate(cacheKey) }
                     .also { cacheSynchronizer?.publishCacheInvalidation(cacheKey) }
             }
+
+    override suspend fun refresh(key: String): Boolean =
+        asyncUpstreamDataLoader(key)
+            ?.let { put(key, it) }
+            ?: false
 
     private suspend fun acquireLock(key: String, duration: Duration): Boolean =
         reactiveStringRedisTemplate

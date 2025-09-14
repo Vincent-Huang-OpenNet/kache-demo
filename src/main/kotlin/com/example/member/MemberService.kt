@@ -4,17 +4,20 @@ import com.example.kaffeine.Kache
 import java.time.Duration
 import java.time.Instant
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.time.delay
 import org.springframework.stereotype.Service
 
 @Service
 class MemberService(
     private val memberCache: Kache<MemberPO>,
+    private val organizationCache: Kache<OrganizationPO>,
     private val memberRepository: MemberRepository
 ) {
 
     suspend fun create(memberRequest: MemberRequest): MemberPO =
         MemberPO(
+            organizationId = memberRequest.organizationId,
             name = memberRequest.name,
             email = memberRequest.email,
             createTime = Instant.now()
@@ -22,9 +25,35 @@ class MemberService(
             .let { memberRepository.save(it) }
             .also { memberCache.put(it.id.toString(), it) }
 
-    suspend fun queryAll(): Flow<MemberPO> = memberRepository.findAll()
+    suspend fun queryAll(): Flow<MemberResponse> =
+        memberRepository
+            .findAll()
+            .map { memberPO ->
+                val (_, name, email) = organizationCache.getOrDefault(memberPO.id!!.toString(), OrganizationPO(-1L, "", ""))
 
-    suspend fun queryById(id: Long): MemberPO? = memberCache.getIfPresent(id.toString())
+                MemberResponse(
+                    id = memberPO.id,
+                    name = memberPO.name,
+                    email = memberPO.email,
+                    organizationName = name,
+                    organizationEmail = email,
+                )
+            }
+
+    suspend fun queryById(id: Long): MemberResponse? =
+        memberCache
+            .getIfPresent(id.toString())
+            ?.let { memberPO ->
+                val (_, name, email) = organizationCache.getOrDefault(memberPO.id!!.toString(), OrganizationPO(-1L, "", ""))
+
+                MemberResponse(
+                    id = memberPO.id,
+                    name = memberPO.name,
+                    email = memberPO.email,
+                    organizationName = name,
+                    organizationEmail = email,
+                )
+            }
 
     suspend fun modify(id: Long, memberRequest: MemberRequest): Unit =
         run {
@@ -32,6 +61,7 @@ class MemberService(
             val memberPO = memberRepository
                 .findById(id)
                 ?.copy(
+                    organizationId = memberRequest.organizationId,
                     name = memberRequest.name,
                     email = memberRequest.email
                 )

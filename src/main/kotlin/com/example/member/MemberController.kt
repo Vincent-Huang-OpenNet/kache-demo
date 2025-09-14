@@ -25,14 +25,14 @@ class MemberController(
             .let { ResponseEntity.created(URI.create("/api/members/${it.id}")).build() }
 
     @GetMapping
-    suspend fun getAllMembers(): ResponseEntity<List<MemberPO>> =
+    suspend fun getAllMembers(): ResponseEntity<List<MemberResponse>> =
         memberService
             .queryAll()
             .toList()
             .let { ResponseEntity.ok(it) }
 
     @GetMapping("/{id}")
-    suspend fun getMemberById(@PathVariable id: Long): ResponseEntity<MemberPO> =
+    suspend fun getMemberById(@PathVariable id: Long): ResponseEntity<MemberResponse> =
         memberService
             .queryById(id)
             ?.let { ResponseEntity.ok(it) }

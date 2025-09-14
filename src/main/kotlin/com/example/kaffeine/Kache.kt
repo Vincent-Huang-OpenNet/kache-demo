@@ -22,6 +22,8 @@ interface Kache<T> {
      */
     suspend fun getIfPresent(key: String): T?
 
+    suspend fun getOrDefault(key: String, data: T): T = getIfPresent(key) ?: data
+
     /**
      * ```markdown
      *
@@ -49,4 +51,6 @@ interface Kache<T> {
      * invalidate L2 cache and refresh all L1 caches
      */
     suspend fun invalidateAllCache(key: String)
+
+    suspend fun refresh(key: String): Boolean
 }

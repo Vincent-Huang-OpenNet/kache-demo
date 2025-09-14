@@ -61,7 +61,7 @@ class RedisPubSubSynchronizer(
     override fun handleCacheInvalidation(cacheKey: String) =
         registeredKaches
             .entries
-            .also { log.info("handleCacheInvalidation for $it") }
+            .also { log.debug("handleCacheInvalidation for $it") }
             .firstOrNull { identifier -> cacheKey.retrieveIdentifier() == identifier.key }
             ?.value
             ?.invalidateLocalCache(cacheKey)

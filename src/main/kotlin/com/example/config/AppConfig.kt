@@ -6,6 +6,8 @@ import com.example.kaffeine.KacheSynchronizer
 import com.example.kaffeine.RedisPubSubSynchronizer
 import com.example.member.MemberPO
 import com.example.member.MemberRepository
+import com.example.member.OrganizationPO
+import com.example.member.OrganizationRepository
 import com.github.benmanes.caffeine.cache.Caffeine
 import java.time.Duration
 import kotlinx.coroutines.runBlocking
@@ -13,7 +15,9 @@ import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.data.redis.connection.ReactiveRedisConnectionFactory
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate
+import org.springframework.scheduling.annotation.EnableScheduling
 
+@EnableScheduling
 @Configuration
 class AppConfig {
     @Bean
@@ -34,7 +38,30 @@ class AppConfig {
                     clazz = MemberPO::class.java,
                     caffeine = caffeineCache,
                     reactiveStringRedisTemplate = reactiveStringRedisTemplate,
-                    asyncLoader = { key -> memberRepository.findById(key.toLong()) },
+                    asyncUpstreamDataLoader = { key -> memberRepository.findById(key.toLong()) },
+                    cacheSynchronizer = cacheSynchronizer
+                )
+            }
+
+    @Bean
+    fun organizationCache(
+        reactiveStringRedisTemplate: ReactiveStringRedisTemplate,
+        organizationRepository: OrganizationRepository,
+        cacheSynchronizer: KacheSynchronizer,
+    ): Kache<OrganizationPO> =
+        Caffeine
+            .newBuilder()
+            .maximumSize(16)
+            .expireAfterWrite(Duration.ofMinutes(30))
+            .recordStats()
+            .build<String, OrganizationPO>()
+            .let { caffeineCache ->
+                KacheImpl(
+                    identifier = "OrganizationPO",
+                    clazz = OrganizationPO::class.java,
+                    caffeine = caffeineCache,
+                    reactiveStringRedisTemplate = reactiveStringRedisTemplate,
+                    asyncUpstreamDataLoader = { key -> organizationRepository.findById(key.toLong()) },
                     cacheSynchronizer = cacheSynchronizer
                 )
             }
