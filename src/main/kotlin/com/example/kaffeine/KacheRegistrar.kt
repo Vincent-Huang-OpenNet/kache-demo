@@ -7,11 +7,9 @@ class KacheRegistrar(
     private val kacheSynchronizer: KacheSynchronizer,
     private val kaches: List<Kache<*>>,
 ) {
-
     @PostConstruct
-    fun registerCaches() {
+    fun registerCaches() =
         runBlocking {
-            kaches.forEach { cache -> kacheSynchronizer.registerCache(cache.identifier(), cache) }
+            kaches.forEach { kacheSynchronizer.registerKache(it.identifier(), it) }
         }
-    }
 }
