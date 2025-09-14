@@ -1,10 +1,13 @@
 package com.example.kaffeine
 
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import jakarta.annotation.PostConstruct
 import jakarta.annotation.PreDestroy
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.reactive.awaitFirst
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 import org.springframework.data.redis.connection.ReactiveRedisConnectionFactory
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate
 import org.springframework.data.redis.listener.ChannelTopic
@@ -16,9 +19,10 @@ class RedisPubSubSynchronizer(
 ) : KacheSynchronizer {
     companion object {
         private const val CACHE_INVALIDATION_CHANNEL = "kache:invalidation"
+        private val log = LoggerFactory.getLogger(RedisPubSubSynchronizer::class.java)
     }
 
-    private val objectMapper = jacksonObjectMapper()
+    private val objectMapper = jacksonObjectMapper().registerModule(JavaTimeModule())
     private val registeredCaches = ConcurrentHashMap<String, Kache<*>>()
     private lateinit var messageListener: ReactiveRedisMessageListenerContainer
 
@@ -26,7 +30,8 @@ class RedisPubSubSynchronizer(
     fun initialize() {
         messageListener = ReactiveRedisMessageListenerContainer(reactiveRedisConnectionFactory)
 
-        messageListener.receive(ChannelTopic(CACHE_INVALIDATION_CHANNEL))
+        messageListener
+            .receive(ChannelTopic(CACHE_INVALIDATION_CHANNEL))
             .doOnNext { topicMessage ->
                 val invalidationMessage = objectMapper.readValue(
                     topicMessage.message,
@@ -61,6 +66,7 @@ class RedisPubSubSynchronizer(
     private fun handleCacheInvalidation(message: CacheInvalidationMessage) {
         registeredCaches
             .entries
+            .also { log.info("Handling cache invalidation for $message, $it") }
             .firstOrNull { identifier -> message.cacheKey.split(":")[1] == identifier.key }
             ?.value
             ?.invalidateLocalCache(message.cacheKey)

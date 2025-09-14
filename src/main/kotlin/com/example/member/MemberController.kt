@@ -14,7 +14,9 @@ import org.springframework.web.bind.annotation.RestController
 
 @RestController
 @RequestMapping("/api/members")
-class MemberController(private val memberService: MemberService) {
+class MemberController(
+    private val memberService: MemberService,
+) {
 
     @PostMapping
     suspend fun createMember(@RequestBody memberRequest: MemberRequest): ResponseEntity<Unit> =

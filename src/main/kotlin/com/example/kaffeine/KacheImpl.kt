@@ -1,7 +1,9 @@
 package com.example.kaffeine
 
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.github.benmanes.caffeine.cache.Cache
+import org.slf4j.LoggerFactory
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate
 import org.springframework.data.redis.core.getAndAwait
 import org.springframework.data.redis.core.setAndAwait
@@ -14,15 +16,22 @@ class KacheImpl<T>(
     private val asyncLoader: suspend (key: String) -> T?,
     private val cacheSynchronizer: KacheSynchronizer? = null,
 ) : Kache<T> {
-    private val objectMapper = jacksonObjectMapper()
+    companion object {
+        private val log = LoggerFactory.getLogger(this::class.java)
+    }
 
-    override fun buildKey(key: String): String = "kache:$identifier:$key"
+    private val objectMapper = jacksonObjectMapper().registerModule(JavaTimeModule())
+
+    override fun identifier(): String = identifier
+
+    override fun buildKey(key: String): String = "KACHE:$identifier:$key"
 
     override suspend fun getIfPresent(key: String): T? {
         val cacheKey = buildKey(key)
 
         val l1CachedValue = caffeine.getIfPresent(cacheKey)
         if (l1CachedValue != null) {
+            log.info("Found cached value in L1 for $cacheKey")
             return l1CachedValue
         }
 
@@ -31,6 +40,7 @@ class KacheImpl<T>(
 
         if (l2CachedValue != null) {
             caffeine.put(cacheKey, l2CachedValue)
+            log.info("Found cached value in L2 for $cacheKey")
             return l2CachedValue
         }
 
@@ -55,7 +65,8 @@ class KacheImpl<T>(
         cacheSynchronizer?.publishCacheInvalidation(cacheKey)
     }
 
-    override fun existLocal(key: String): Boolean = caffeine.getIfPresent(key) != null
-
-    override fun invalidateLocalCache(cacheKey: String) = caffeine.invalidate(cacheKey)
+    override fun invalidateLocalCache(cacheKey: String) =
+        caffeine
+            .invalidate(cacheKey)
+            .also { log.info("Local cache invalidated: $cacheKey") }
 }
