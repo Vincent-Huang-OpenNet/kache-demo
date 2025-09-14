@@ -3,6 +3,8 @@ package com.example.kaffeine
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.github.benmanes.caffeine.cache.Cache
+import java.time.Duration
+import kotlinx.coroutines.reactive.awaitFirst
 import org.slf4j.LoggerFactory
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate
 import org.springframework.data.redis.core.getAndAwait
@@ -18,14 +20,11 @@ class KacheImpl<T>(
 ) : Kache<T> {
     companion object {
         private val log = LoggerFactory.getLogger(this::class.java)
-        private const val KEY_PREFIX = "KACHE"
     }
 
     private val objectMapper = jacksonObjectMapper().registerModule(JavaTimeModule())
 
     override fun identifier(): String = identifier
-
-    override fun buildKey(key: String): String = "$KEY_PREFIX:$identifier:$key"
 
     override suspend fun getIfPresent(key: String): T? =
         buildKey(key)
@@ -38,12 +37,12 @@ class KacheImpl<T>(
                         .getAndAwait(cacheKey)
                         ?.let { objectMapper.readValue(it, clazz) }
                         ?.also { log.debug("Found cached value in L2 with $cacheKey") }
-                        ?: asyncLoader(key)
+                        ?: acquireLock(buildUpdateLockKey(), Duration.ofMillis(500))
+                            .takeIf { it }
+                            ?.let { asyncLoader(key) }
                             ?.also { log.debug("Loaded value from upstream with $cacheKey") }
                             ?.also { data -> put(key, data) }
             }
-
-    override suspend fun getOrDefault(key: String, data: T): T = getIfPresent(key) ?: data
 
     override suspend fun put(key: String, data: T): Boolean =
         buildKey(key)
@@ -61,4 +60,20 @@ class KacheImpl<T>(
         caffeine
             .invalidate(cacheKey)
             .also { log.debug("Local cache invalidated: $cacheKey") }
+
+    override suspend fun invalidateAllCache(key: String) =
+        buildKey(key)
+            .let { cacheKey ->
+                reactiveStringRedisTemplate
+                    .delete(cacheKey)
+                    .awaitFirst()
+                    .let { caffeine.invalidate(cacheKey) }
+                    .also { cacheSynchronizer?.publishCacheInvalidation(cacheKey) }
+            }
+
+    private suspend fun acquireLock(key: String, duration: Duration): Boolean =
+        reactiveStringRedisTemplate
+            .opsForValue()
+            .setIfAbsent(key, "1", duration)
+            .awaitFirst()
 }

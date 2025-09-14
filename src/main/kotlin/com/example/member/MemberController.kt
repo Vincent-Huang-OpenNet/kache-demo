@@ -27,14 +27,14 @@ class MemberController(
     @GetMapping
     suspend fun getAllMembers(): ResponseEntity<List<MemberPO>> =
         memberService
-            .findAll()
+            .queryAll()
             .toList()
             .let { ResponseEntity.ok(it) }
 
     @GetMapping("/{id}")
     suspend fun getMemberById(@PathVariable id: Long): ResponseEntity<MemberPO> =
         memberService
-            .findById(id)
+            .queryById(id)
             ?.let { ResponseEntity.ok(it) }
             ?: ResponseEntity.notFound().build()
 
@@ -44,13 +44,13 @@ class MemberController(
         @RequestBody memberRequest: MemberRequest
     ): ResponseEntity<Unit> =
         memberService
-            .update(id, memberRequest)
+            .modify(id, memberRequest)
             ?.let { ResponseEntity.noContent().build() }
             ?: ResponseEntity.notFound().build()
 
     @DeleteMapping("/{id}")
     suspend fun deleteMember(@PathVariable id: Long): ResponseEntity<Unit> =
         memberService
-            .deleteById(id)
+            .removeById(id)
             .let { ResponseEntity.noContent().build() }
 }

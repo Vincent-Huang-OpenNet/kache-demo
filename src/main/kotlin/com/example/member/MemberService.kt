@@ -1,9 +1,10 @@
 package com.example.member
 
 import com.example.kaffeine.Kache
+import java.time.Duration
 import java.time.Instant
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.forEach
+import kotlinx.coroutines.time.delay
 import org.springframework.stereotype.Service
 
 @Service
@@ -21,22 +22,30 @@ class MemberService(
             .let { memberRepository.save(it) }
             .also { memberCache.put(it.id.toString(), it) }
 
-    suspend fun findAll(): Flow<MemberPO> =
-        memberRepository
-            .findAll()
-            .also { it.collect { member -> memberCache.put(member.id.toString(), member) } }
+    suspend fun queryAll(): Flow<MemberPO> = memberRepository.findAll()
 
-    suspend fun findById(id: Long): MemberPO? =
-        memberCache.getIfPresent(id.toString())
+    suspend fun queryById(id: Long): MemberPO? = memberCache.getIfPresent(id.toString())
 
-    suspend fun update(id: Long, memberRequest: MemberRequest): MemberPO? =
-        memberRepository
-            .findById(id)
-            ?.copy(
-                name = memberRequest.name,
-                email = memberRequest.email
-            )
-            ?.let { entity -> memberRepository.save(entity) }
+    suspend fun modify(id: Long, memberRequest: MemberRequest): Unit =
+        run {
+            memberCache.invalidateAllCache(id.toString())
+            val memberPO = memberRepository
+                .findById(id)
+                ?.copy(
+                    name = memberRequest.name,
+                    email = memberRequest.email
+                )
+                ?.let { entity -> memberRepository.save(entity) }
+            delay(Duration.ofSeconds(3000))
+            memberPO?.let { memberCache.put(it.id.toString(), it) }
+            memberCache.invalidateAllCache(id.toString())
+        }
 
-    suspend fun deleteById(id: Long): Unit = memberRepository.deleteById(id)
+    suspend fun removeById(id: Long): Unit =
+        run {
+            memberCache.invalidateAllCache(id.toString())
+            memberRepository.deleteById(id)
+            delay(Duration.ofSeconds(3000))
+            memberCache.invalidateAllCache(id.toString())
+        }
 }

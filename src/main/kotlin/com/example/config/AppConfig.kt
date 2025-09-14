@@ -26,6 +26,7 @@ class AppConfig {
             .newBuilder()
             .maximumSize(1024)
             .expireAfterWrite(Duration.ofMinutes(30))
+            .recordStats()
             .build<String, MemberPO>()
             .let { caffeineCache ->
                 KacheImpl(
@@ -61,10 +62,9 @@ class AppConfig {
     ): String =
         runBlocking {
             allKacheList
-                .map {
+                .joinToString(",") {
                     kacheSynchronizer.registerKache(it.identifier(), it)
                     it.identifier()
                 }
-                .joinToString(",")
         }
 }

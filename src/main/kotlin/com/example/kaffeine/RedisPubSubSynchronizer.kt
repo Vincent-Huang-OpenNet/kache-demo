@@ -37,7 +37,7 @@ class RedisPubSubSynchronizer(
                     CacheInvalidationMessage::class.java
                 )
 
-                handleCacheInvalidation(invalidationMessage)
+                handleCacheInvalidation(invalidationMessage.cacheKey)
             }
             .subscribe()
     }
@@ -58,20 +58,22 @@ class RedisPubSubSynchronizer(
             .awaitFirst()
     }
 
-    override suspend fun <T> registerKache(identifier: String, kache: Kache<T>) {
-        registeredKaches[identifier] = kache
-    }
-
-    private fun handleCacheInvalidation(message: CacheInvalidationMessage) {
+    override fun handleCacheInvalidation(cacheKey: String) =
         registeredKaches
             .entries
-            .also { log.info("Handling cache invalidation for $message, $it") }
-            .firstOrNull { identifier -> message.cacheKey.split(":")[1] == identifier.key }
+            .also { log.info("handleCacheInvalidation for $it") }
+            .firstOrNull { identifier -> cacheKey.retrieveIdentifier() == identifier.key }
             ?.value
-            ?.invalidateLocalCache(message.cacheKey)
+            ?.invalidateLocalCache(cacheKey)
+            ?: Unit
+
+    override fun <T> registerKache(identifier: String, kache: Kache<T>) {
+        registeredKaches[identifier] = kache
     }
 
     data class CacheInvalidationMessage(
         val cacheKey: String
     )
+
+    private fun String.retrieveIdentifier(): String? = split(":").getOrNull(1)
 }
