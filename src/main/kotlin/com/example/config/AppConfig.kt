@@ -36,7 +36,7 @@ class AppConfig {
                 KacheImpl(
                     identifier = "MemberPO",
                     clazz = MemberPO::class.java,
-                    caffeine = caffeineCache,
+                    caffeineCache = caffeineCache,
                     reactiveStringRedisTemplate = reactiveStringRedisTemplate,
                     asyncUpstreamDataLoader = { key -> memberRepository.findById(key.toLong()) },
                     cacheSynchronizer = cacheSynchronizer
@@ -59,7 +59,7 @@ class AppConfig {
                 KacheImpl(
                     identifier = "OrganizationPO",
                     clazz = OrganizationPO::class.java,
-                    caffeine = caffeineCache,
+                    caffeineCache = caffeineCache,
                     reactiveStringRedisTemplate = reactiveStringRedisTemplate,
                     asyncUpstreamDataLoader = { key -> organizationRepository.findById(key.toLong()) },
                     cacheSynchronizer = cacheSynchronizer

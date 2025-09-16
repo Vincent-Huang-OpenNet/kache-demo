@@ -13,7 +13,7 @@ import org.springframework.data.redis.core.setAndAwait
 class KacheImpl<T>(
     private val identifier: String,
     private val clazz: Class<T>,
-    private val caffeine: Cache<String, T>,
+    private val caffeineCache: Cache<String, T>,
     private val reactiveStringRedisTemplate: ReactiveStringRedisTemplate,
     private val asyncUpstreamDataLoader: suspend (key: String) -> T?,
     private val cacheSynchronizer: KacheSynchronizer? = null,
@@ -29,7 +29,7 @@ class KacheImpl<T>(
     override suspend fun getIfPresent(key: String): T? =
         buildKey(key)
             .let { cacheKey ->
-                caffeine
+                caffeineCache
                     .getIfPresent(cacheKey)
                     ?.also { log.trace("Found cached value in L1 with $cacheKey") }
                     ?: reactiveStringRedisTemplate
@@ -51,13 +51,13 @@ class KacheImpl<T>(
                     .opsForValue()
                     .setAndAwait(cacheKey, objectMapper.writeValueAsString(data))
                     .takeIf { it }
-                    ?.also { caffeine.put(cacheKey, data!!) }
+                    ?.also { caffeineCache.put(cacheKey, data!!) }
                     ?.also { cacheSynchronizer?.publishCacheInvalidation(cacheKey) }
                     ?: false
             }
 
     override fun invalidateLocalCache(cacheKey: String): Unit =
-        caffeine
+        caffeineCache
             .invalidate(cacheKey)
             .also { log.trace("Local cache invalidated: $cacheKey") }
 
@@ -67,7 +67,7 @@ class KacheImpl<T>(
                 reactiveStringRedisTemplate
                     .delete(cacheKey)
                     .awaitFirst()
-                    .let { caffeine.invalidate(cacheKey) }
+                    .let { caffeineCache.invalidate(cacheKey) }
                     .also { cacheSynchronizer?.publishCacheInvalidation(cacheKey) }
             }
 
