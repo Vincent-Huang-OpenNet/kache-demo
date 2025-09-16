@@ -1,9 +1,7 @@
 package com.example.kaffeine
 
 /**
- * Cache Avalanche
- * Cache Breakdown
- * Cache Penetration
+ * TODO: Write the document about how kache works to prevent these issues: Cache Avalanche, Cache Breakdown, and Cache Penetration
  */
 interface Kache<T> {
     /**
