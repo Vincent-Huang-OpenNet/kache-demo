@@ -83,7 +83,7 @@ class AppConfig {
         listOf(memberCache)
 
     @Bean
-    fun registerKachesResult(
+    fun registerKaches(
         kacheSynchronizer: KacheSynchronizer,
         allKacheList: List<Kache<*>>,
     ): String =
