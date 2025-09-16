@@ -31,16 +31,16 @@ class KacheImpl<T>(
             .let { cacheKey ->
                 caffeine
                     .getIfPresent(cacheKey)
-                    ?.also { log.debug("Found cached value in L1 with $cacheKey") }
+                    ?.also { log.trace("Found cached value in L1 with $cacheKey") }
                     ?: reactiveStringRedisTemplate
                         .opsForValue()
                         .getAndAwait(cacheKey)
                         ?.let { objectMapper.readValue(it, clazz) }
-                        ?.also { log.debug("Found cached value in L2 with $cacheKey") }
+                        ?.also { log.trace("Found cached value in L2 with $cacheKey") }
                     ?: acquireLock(buildUpdateLockKey(), Duration.ofMillis(500))
                         .takeIf { it }
                         ?.let { asyncUpstreamDataLoader(key) }
-                        ?.also { log.debug("Loaded value from upstream with $cacheKey") }
+                        ?.also { log.trace("Loaded value from upstream with $cacheKey") }
                         ?.also { data -> put(key, data) }
             }
 
@@ -59,7 +59,7 @@ class KacheImpl<T>(
     override fun invalidateLocalCache(cacheKey: String): Unit =
         caffeine
             .invalidate(cacheKey)
-            .also { log.debug("Local cache invalidated: $cacheKey") }
+            .also { log.trace("Local cache invalidated: $cacheKey") }
 
     override suspend fun invalidateAllCache(key: String) =
         buildKey(key)
@@ -73,6 +73,7 @@ class KacheImpl<T>(
 
     override suspend fun refresh(key: String): Boolean =
         asyncUpstreamDataLoader(key)
+            ?.also { log.trace("Refreshed cache with $key") }
             ?.let { put(key, it) }
             ?: false
 

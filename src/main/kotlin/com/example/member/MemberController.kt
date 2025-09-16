@@ -45,8 +45,7 @@ class MemberController(
     ): ResponseEntity<Unit> =
         memberService
             .modify(id, memberRequest)
-            ?.let { ResponseEntity.noContent().build() }
-            ?: ResponseEntity.notFound().build()
+            .let { ResponseEntity.noContent().build() }
 
     @DeleteMapping("/{id}")
     suspend fun deleteMember(@PathVariable id: Long): ResponseEntity<Unit> =

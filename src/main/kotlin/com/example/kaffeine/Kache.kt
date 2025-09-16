@@ -1,56 +1,74 @@
 package com.example.kaffeine
 
+/**
+ * Cache Avalanche
+ * Cache Breakdown
+ * Cache Penetration
+ */
 interface Kache<T> {
     /**
-     * e.g. "MemberPO"
+     * For example, "MemberPO"
+     *
+     * 1. We use this to classify different caches for registering to KacheSynchronizer
+     * 2. We use this to build a unique cache key prefix
      */
     fun identifier(): String
 
+    /**
+     * For example, "KACHE:MemberPO:987"
+     *
+     * 1. We use this as the unique cache key in both local and distributed caches
+     */
     fun buildKey(key: String): String = "KACHE:${identifier()}:$key"
 
+    /**
+     * For example "KACHE:UPDATE_LOCK:MemberPO:987"
+     *
+     * 1. We use this as the distributed lock key in prevent cache breakdown progress
+     */
     fun buildUpdateLockKey(): String = "KACHE:UPDATE_LOCK:${identifier()}"
 
     /**
      * ```markdown
-     * 1 If L1 cache is hit, return the value immediately
-     * 2 If L1 cache missed, check L2 cache
-     *   2.1 If L2 hit, update L1 cache and return value
-     *   2.2 If L2 missed, acquire lock to prevent cache stampede
-     *     2.2.1 If acquire lock success, update L2 cache from upstream and then refresh all L1
-     *     2.2.2 If acquire lock fails (another coroutine is updating), return null immediately
+     * Check local cache
+     *     Local cache is hit, return the value immediately
+     *     Local cache missed, check distributed cache
+     *         Distributed cache is hit, update local cache and return value
+     *         Distributed cache missed, acquire distributed lock
+     *             Acquire distributed lock success, check upstream data source
+     *                 Upstream data source has data, update distributed cache and then refresh all local caches
+     *                 Upstream data source has no data, return null
+     *             Acquire distributed lock failure, return null
      * ```
      */
     suspend fun getIfPresent(key: String): T?
 
+    /**
+     * Sometimes we can accept a default value for a while until the cache is refreshed
+     */
     suspend fun getOrDefault(key: String, data: T): T = getIfPresent(key) ?: data
 
     /**
      * ```markdown
-     *
-     * 1. update L2 cache
-     * 2. update current instant L1 cache (we need this because maybe we are the only instance)
-     * 3. refresh all L1 caches
-     *
-     * we choose double delete strategy to refresh all L1 caches since multi level cache can't be strongly consistent
-     * so best practice is double delete with a small delay to achieve eventual consistency
-     *
-     * put("987", memberPO)
-     * updateUpstream(memberPO)
-     * delay(Duration.ofSeconds(3))
-     * put("987", memberPO)
+     * update distributed cache
+     * update local cache on current instance (we need this because maybe we are the only instance)
+     * broadcast to refresh all local caches
      * ```
      */
     suspend fun put(key: String, data: T): Boolean
 
     /**
-     * receive signal and invalidate local L1 cache
+     * Receive signal and invalidate the local cache
      */
     fun invalidateLocalCache(cacheKey: String)
 
     /**
-     * invalidate L2 cache and refresh all L1 caches
+     * Invalidate distributed cache and broadcast to refresh all local caches
      */
     suspend fun invalidateAllCache(key: String)
 
+    /**
+     * According to the key, reload data from upstream and update both distributed and broadcast to refresh all local caches
+     */
     suspend fun refresh(key: String): Boolean
 }

@@ -57,7 +57,6 @@ class MemberService(
 
     suspend fun modify(id: Long, memberRequest: MemberRequest): Unit =
         run {
-            memberCache.invalidateAllCache(id.toString())
             val memberPO = memberRepository
                 .findById(id)
                 ?.copy(
@@ -66,16 +65,13 @@ class MemberService(
                     email = memberRequest.email
                 )
                 ?.let { entity -> memberRepository.save(entity) }
-            delay(Duration.ofSeconds(3000))
             memberPO?.let { memberCache.put(it.id.toString(), it) }
             memberCache.invalidateAllCache(id.toString())
         }
 
     suspend fun removeById(id: Long): Unit =
         run {
-            memberCache.invalidateAllCache(id.toString())
             memberRepository.deleteById(id)
-            delay(Duration.ofSeconds(3000))
             memberCache.invalidateAllCache(id.toString())
         }
 }

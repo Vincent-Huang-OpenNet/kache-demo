@@ -17,7 +17,7 @@ class RedisPubSubSynchronizer(
     private val reactiveRedisConnectionFactory: ReactiveRedisConnectionFactory
 ) : KacheSynchronizer {
     companion object {
-        private const val CACHE_INVALIDATION_CHANNEL = "kache:invalidation"
+        private const val CACHE_INVALIDATION_CHANNEL = "KACHE:INVALIDATION"
         private val log = LoggerFactory.getLogger(RedisPubSubSynchronizer::class.java)
     }
 
